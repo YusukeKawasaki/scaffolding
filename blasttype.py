@@ -6,6 +6,13 @@ CONTAIN = 3
 CONTAINED = 4
 OTHER = 0
 
+def Do_blast(SUBJECT_FASTA_NAME, QUERY_FASTA_NAME, BLAST_NAME):
+    cmd = 'makeblastdb -in %s -dbtype nucl -hash_index'%SUBJECT_FASTA_NAME #BLAST用のデータベースを作るコマンド
+    subprocess.call( cmd, shell=True  ) #コマンドをターミナルで出力する
+    cmd = 'blastn -db %s -query %s -out %s -outfmt "6 std qlen slen"'%(SUBJECT_FASTA_NAME, 
+                                                                        QUERY_FASTA_NAME, BLAST_NAME) #BLASTデータを作成するコマンド
+    subprocess.call(cmd, shell=True) #コマンドをターミナルで出力する
+
 class Blast_data:
     "以上の操作で得られたBLASTのTABファイルを(x, y)の形で取得するためのクラス"
     def __init__(self, tab_text_name):
