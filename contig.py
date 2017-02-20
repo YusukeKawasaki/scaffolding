@@ -288,3 +288,29 @@ class Subject(contig):
                     continue
         return contain_well_list
 
+class Fragment:
+    u"""contigオブジェクト、開始位置、終了位置を持つオブジェクト
+    self.seqで配列データを返す。開始位置　>　終了位置なら相補鎖を返す。"""
+    def __init__(self, contig, start, end):
+        self.contig = contig
+        self.start = start
+        self.end = end
+        self.seq = self.SEQ()
+
+    def SEQ(self):
+        if self.start < self.end:
+            return self.contig.fasta.seq[self.start:self.end + 1]
+        else:
+            return self.contig.fasta.seq[self.end: self.start + 1].reverse_complement()
+
+    def check(self, log_text = None):
+        if log_text is None:
+            print "contig:",self.contig.name
+            print "start:",self.start
+            print "end:",self.end
+            print "direction:",("+" if self.start < self.end else "-")
+        else:
+            log_text.write("contig:%s (%d...%d)\n"%(self.contig.name, 0, self.contig.len - 1))
+            log_text.write("start:%d\n"%(self.start))
+            log_text.write("end:%d\n"%(self.end))
+            log_text.write("direction:%s\n\n"%("+" if self.start < self.end else "-"))

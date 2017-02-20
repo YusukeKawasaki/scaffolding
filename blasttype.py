@@ -1,5 +1,7 @@
 #coding: utf-8
 
+import subprocess
+
 START_LINK = 1
 END_LINK = 2
 CONTAIN = 3
