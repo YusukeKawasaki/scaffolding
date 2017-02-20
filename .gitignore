@@ -1,5 +1,7 @@
 *.fa
+*.csv
 *.fasta
+*.txt
 *.nhd
 *.nhi
 *.nhr
