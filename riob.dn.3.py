@@ -1,19 +1,53 @@
+#!/usr/bin/env python
 #coding: utf-8
 
+from datetime import datetime
 import copy
 import subprocess
 import csv
-import inspect
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from pprint import pprint
+import argparse
+import sys
 
-SUBJECT_FASTA_NAME = "IMET0296_x_IMET0261_consensuses.fa" #サブジェクト名
-QUERY_FASTA_NAME = "MiSeq_Vp_motooka.fasta" #クエリ名
+def command(argv):
+    print argv
+    
+    global toLog
+    global toRemoveN
+    global SUBJECT_FASTA_NAME
+    global QUERY_FASTA_NAME
+    global OUTPUT_FASTA_NAME
+
+    toLog = False
+    toRemoveN = False
+    OUTPUT_FASTA_NAME = datetime.now().strftime('%m%d%H%M.fasta')
+    parser = argparse.ArgumentParser()
+
+    #required arguments
+    parser.add_argument("-p", help="PacBio fasta name", required=True)
+    parser.add_argument("-m", help="MiSeq fasta name", required=True)
+
+    #not required arguments
+    parser.add_argument("-o", help="Output file name(default = time)", required=False)
+
+    #Boolean arguments
+    parser.add_argument("-n", help="Removes N-gap", action = "store_true", required=False)
+    parser.add_argument("-l", help="Creates a log file", action = "store_true", required=False)
+
+    args = parser.parse_args(argv)
+
+    toLog = args.l
+    toRemoveN = args.n
+    SUBJECT_FASTA_NAME = args.p
+    QUERY_FASTA_NAME = args.m
+    if args.o is not None:
+        OUTPUT_FASTA_NAME = args.o
+
+command(sys.argv[1:])
+
 nnn_removed_name = "n_removed_%s_%s"%(QUERY_FASTA_NAME, SUBJECT_FASTA_NAME) #nnnを埋めたファイルを作る際はそのファイル名
-out_put_fasta_name = "20170217296.fasta" #出力ファイル名
-
 BLAST_NAME = "blast_%s_%s"%(QUERY_FASTA_NAME, SUBJECT_FASTA_NAME) #ここにタブ形式で出力されたBLASTファイルが入る
 S_BLAST_NAME = "blast_%s_%s"%(SUBJECT_FASTA_NAME, SUBJECT_FASTA_NAME) #サブジェクト同士のBLAST結果がここに入る
 
@@ -809,7 +843,8 @@ class Sqs_chain:
                     if self.type == "line":
                         fragment_list.append(Fragment(subject, now_s_pointa, next_end_point))
         full_seq = fragment_list[0].seq
-        log_text.write(">>seq:%s\n\n"%(self.name))
+        if log_text is not None:
+            log_text.write(">>seq:%s\n\n"%(self.name))
         for fragment in fragment_list:
             fragment.check(log_text)
             if fragment != fragment_list[0]:
@@ -987,14 +1022,17 @@ def search_object(obj_name, search_list):
             return i
 
 #################
-#ここからスタート#
+# main- routine #
 #################
 
 #blast
 Do_blast(SUBJECT_FASTA_NAME, QUERY_FASTA_NAME, BLAST_NAME)
 
-log_text_name = "000" #ログテキスト名
-log_text = open(log_text_name, "w")
+if toLog:
+    log_text_name = "%s_log.txt"%OUTPUT_FASTA_NAME #ログテキスト名
+    log_text = open(log_text_name, "w")
+else:
+    log_text = None
 
 #fastaの読み込み
 QUERY_FASTA_DATA = SeqIO.parse(QUERY_FASTA_NAME, "fasta")
@@ -1052,6 +1090,10 @@ def make_blast_list(BLAST_NAME):
         blast.decide()
 
     print 'blast.decide done'
+
+    #型がないものを削除
+    well_blast_list = [blast for blast in well_blast_list if blast.type]
+
     return well_blast_list
 
 well_blast_list = make_blast_list(BLAST_NAME)
@@ -1063,7 +1105,7 @@ sname_set = set(map(lambda x:x.sname,well_blast_list))
 query_list = [Query(qname,QUERY_FASTA,well_blast_list) for qname in qname_set]
 subject_list = [Subject(sname,well_blast_list) for sname in sname_set]
 
-#あるcontigの組み合わせに対してBLAST結果はひとつだけで良い
+#あるcontigの組み合わせに対して(START_LINK, END_LINK)に関してはBLAST結果はひとつだけで良い
 #bitscoreが最も高いものだけ採用して他はすべて削除する
 temp = []
 for blast in well_blast_list:
@@ -1076,7 +1118,6 @@ for blast in well_blast_list:
             temp.append(blast)
 temp = list(set(temp))
 for blast in temp:
-    print blast.name
     well_blast_list.remove(blast)
 
 #SQSデータの作成
@@ -1111,11 +1152,11 @@ for contig in query_list:
     contig.contain_replace(5000) #5000塩基以上のもので置き換え
 
 #置き換えているもののfasta化
-s_seq_list = [x.fasta.make_seqrecord() for x in query_list]
-SeqIO.write(s_seq_list,"okikae_260_s_5000.fasta", "fasta")
+#s_seq_list = [x.fasta.make_seqrecord() for x in query_list]
+#SeqIO.write(s_seq_list,"okikae_260_s_5000.fasta", "fasta")
 
-print "replace done"
+#print "replace done"
 
 #fastaファイルとして出力
 complete_data = [sqs_chain.make_fasta_data(log_text) for sqs_chain in shiritori.sqs_chains]
-SeqIO.write(complete_data, out_put_fasta_name, "fasta")
+SeqIO.write(complete_data, OUTPUT_FASTA_NAME, "fasta")
