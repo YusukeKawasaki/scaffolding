@@ -12,8 +12,7 @@ import argparse
 import sys
 
 def command(argv):
-    print argv
-    
+
     global toLog
     global toRemoveN
     global SUBJECT_FASTA_NAME
@@ -33,7 +32,7 @@ def command(argv):
     parser.add_argument("-o", help="Output file name(default = time)", required=False)
 
     #Boolean arguments
-    parser.add_argument("-n", help="Removes N-gap", action = "store_true", required=False)
+    parser.add_argument("-n", help="Removes Miseq N-gap", action = "store_true", required=False)
     parser.add_argument("-l", help="Creates a log file", action = "store_true", required=False)
 
     args = parser.parse_args(argv)
@@ -657,7 +656,7 @@ class Sqs:
     self.typeはサブジェクトを2つ持つときのみTrueを返す"""
     START = 0
     END = 1
-    def __init__(self,query):#queryはオブジェクトとして、サブジェクトはsnameとして扱う
+    def __init__(self,query,blast_list):#queryはオブジェクトとして、サブジェクトはsnameとして扱う
         self.query = query
         self.name = self.query.name
         self.blasts = (self.DECIDE_BLAST(START_LINK),self.DECIDE_BLAST(END_LINK))
@@ -665,7 +664,7 @@ class Sqs:
         self.directions = map(lambda x:x and int(x.is_reverse + 1) or x,self.blasts) #MiSeqに対してBLASTが正向きなら1、逆向きなら2
         self.type = bool(self.blasts[START] and self.blasts[END]) #始点側、終点側に共にBLASTが存在すればTrue,そうでなければFalseを返します
         if self.type == True:
-            for blast in well_blast_list:
+            for blast in blast_list:
                 for a_blast in self.blasts:
                     if a_blast == blast:
                         blast.in_sqs = True #欠損ないSQSに使われているBLASTについてblast.in_sqs = True
@@ -1043,6 +1042,7 @@ SUBJECT_FASTA = Simple_multi_fasta(SUBJECT_FASTA_DATA)
 print 'data_roading done'
 
 def make_blast_list(BLAST_NAME):
+    u"""マルチ形無し排除まで"""
     BLAST_DATA = Blast_data(BLAST_NAME)
     rowMax = BLAST_DATA.nrows#最終行を整数値で取得
     BITSCORE_BASELINE = 0
@@ -1094,6 +1094,21 @@ def make_blast_list(BLAST_NAME):
     #型がないものを削除
     well_blast_list = [blast for blast in well_blast_list if blast.type]
 
+    #あるcontigの組み合わせに対して(START_LINK, END_LINK)に関してはBLAST結果はひとつだけで良い
+    #bitscoreが最も高いものだけ採用して他はすべて削除する
+    temp = []
+    for blast in well_blast_list:
+        for a_blast in well_blast_list:
+            if blast.qname == a_blast.qname and\
+            blast.sname == a_blast.sname and\
+            blast.type == (START_LINK, END_LINK) and\
+            blast.row != a_blast.row and\
+            blast.bitscore < a_blast.bitscore:
+                temp.append(blast)
+    temp = list(set(temp))
+    for blast in temp:
+        well_blast_list.remove(blast)
+
     return well_blast_list
 
 well_blast_list = make_blast_list(BLAST_NAME)
@@ -1105,23 +1120,30 @@ sname_set = set(map(lambda x:x.sname,well_blast_list))
 query_list = [Query(qname,QUERY_FASTA,well_blast_list) for qname in qname_set]
 subject_list = [Subject(sname,well_blast_list) for sname in sname_set]
 
-#あるcontigの組み合わせに対して(START_LINK, END_LINK)に関してはBLAST結果はひとつだけで良い
-#bitscoreが最も高いものだけ採用して他はすべて削除する
-temp = []
-for blast in well_blast_list:
-    for a_blast in well_blast_list:
-        if blast.qname == a_blast.qname and\
-        blast.sname == a_blast.sname and\
-        blast.type == (START_LINK, END_LINK) and\
-        blast.row != a_blast.row and\
-        blast.bitscore < a_blast.bitscore:
-            temp.append(blast)
-temp = list(set(temp))
-for blast in temp:
-    well_blast_list.remove(blast)
+if toRemoveN:
+    for query in query_list:
+        query.n_replace(30)
+    n_replaced_list = [x.fasta.make_seqrecord() for x in query_list]
+    SeqIO.write(n_replaced_list, nnn_removed_name, "fasta")
+
+    N_BLAST_NAME = "tes.csv"
+    Do_blast(SUBJECT_FASTA_NAME, nnn_removed_name, N_BLAST_NAME)
+
+    well_blast_list = make_blast_list(N_BLAST_NAME)
+
+    QUERY_FASTA_DATA = SeqIO.parse(nnn_removed_name, "fasta")
+    SUBJECT_FASTA_DATA = SeqIO.parse(SUBJECT_FASTA_NAME,"fasta")
+    QUERY_FASTA = Simple_multi_fasta(QUERY_FASTA_DATA)
+    SUBJECT_FASTA = Simple_multi_fasta(SUBJECT_FASTA_DATA)
+
+    qname_set = set(map(lambda x:x.qname,well_blast_list))
+    sname_set = set(map(lambda x:x.sname,well_blast_list))
+
+    query_list = [Query(qname,QUERY_FASTA,well_blast_list) for qname in qname_set]
+    subject_list = [Subject(sname,well_blast_list) for sname in sname_set]
 
 #SQSデータの作成
-sqs_list_raw = [Sqs(query) for query in query_list]
+sqs_list_raw = [Sqs(query, well_blast_list) for query in query_list]
 sqs_list = [sqs for sqs in sqs_list_raw if sqs.type]
 
 print 'sqs making done'
