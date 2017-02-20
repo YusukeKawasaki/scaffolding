@@ -1,0 +1,11 @@
+*.fa
+*.fasta
+*.nhd
+*.nhi
+*.nhr
+*.nin
+*.nog
+*.nsd
+*.nsi
+*.nsq
+.vscode/
