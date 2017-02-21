@@ -295,6 +295,8 @@ class Fragment:
         self.contig = contig
         self.start = start
         self.end = end
+        self.length = abs(end - start)
+        self.is_reverse = bool(start - end < 0)
         self.seq = self.SEQ()
 
     def SEQ(self):
@@ -314,3 +316,34 @@ class Fragment:
             log_text.write("start:%d\n"%(self.start))
             log_text.write("end:%d\n"%(self.end))
             log_text.write("direction:%s\n\n"%("+" if self.start < self.end else "-"))
+
+class Sequence():
+    u"""BLAST群から配列を復元するオブジェクト"""
+    def __init__(self, name):
+        self.name = name
+        self.fragments = [] #ここにFragmentオブジェクトが入り、配列となる
+
+    def PLUNE(self, num):
+        u"""配列をnumの値分だけ削る操作
+        add_blast()で用いる"""
+        if not self.fragments:
+            return 0
+        last_frag = self.fragments[-1]
+        while True:
+            if last_frag.length >= num: #このときlast_fragのみを削れば良い                 
+                if not last_frag.is_reverse:
+                    last_frag.end -= num
+                else:
+                    last_frag.start -= num
+                self.fragments[-1] = last_frag
+                return 0
+            else: #このときlast_fragはまるまる削れ、次のfragmentにまで影響が出る
+                self.fragments.remove(last_frag)
+                num -= last_frag.length
+                last_frag = self.fragments[-1]
+
+    def add_blast(self, blast):
+        u"""blast情報を元に配列を伸長する操作"""
+        if blast.type == START_LINK:
+            
+        elif blast.type == END_LINK:
