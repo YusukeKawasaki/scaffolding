@@ -341,9 +341,3 @@ class Sequence():
                 self.fragments.remove(last_frag)
                 num -= last_frag.length
                 last_frag = self.fragments[-1]
-
-    def add_blast(self, blast):
-        u"""blast情報を元に配列を伸長する操作"""
-        if blast.type == START_LINK:
-            
-        elif blast.type == END_LINK:
