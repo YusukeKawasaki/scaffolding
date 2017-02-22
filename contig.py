@@ -1,6 +1,9 @@
 #coding: utf-8
 
 from blasttype import *
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 
 #blastの型、始点型が１、終点型が２、内包型が３、被内包型が４
 START_LINK = 1
@@ -296,10 +299,9 @@ class Fragment:
         self.start = start
         self.end = end
         self.length = abs(end - start)
-        self.is_reverse = bool(start - end < 0)
-        self.seq = self.SEQ()
+        self.is_reverse = bool(start - end > 0)
 
-    def SEQ(self):
+    def seq(self):
         if self.start < self.end:
             return self.contig.fasta.seq[self.start:self.end + 1]
         else:
@@ -323,18 +325,37 @@ class Sequence():
         self.name = name
         self.fragments = [] #ここにFragmentオブジェクトが入り、配列となる
 
+    def output_seq(self, log_text):
+        u"""現在の配列を返す"""
+        seq = ""
+        if log_text is not None:
+            log_text.write(">>seq:%s\n\n"%(self.name))
+        for fragment in self.fragments:
+            seq += fragment.seq()
+            fragment.check(log_text)
+        return seq
+
+    def output_seqrecord(self, log_text):
+        u"""seq_recordを返す"""
+        seq_r = SeqRecord(self.output_seq(log_text))
+        seq_r.name = str(self.name)
+        seq_r.id = seq_r.name
+        seq_r.description = seq_r.name
+        return seq_r
+
     def PLUNE(self, num):
         u"""配列をnumの値分だけ削る操作
         add_blast()で用いる"""
         if not self.fragments:
             return 0
         last_frag = self.fragments[-1]
+        print num
         while True:
             if last_frag.length >= num: #このときlast_fragのみを削れば良い                 
                 if not last_frag.is_reverse:
                     last_frag.end -= num
                 else:
-                    last_frag.start -= num
+                    last_frag.end += num
                 self.fragments[-1] = last_frag
                 return 0
             else: #このときlast_fragはまるまる削れ、次のfragmentにまで影響が出る
@@ -342,14 +363,56 @@ class Sequence():
                 num -= last_frag.length
                 last_frag = self.fragments[-1]
 
+    def PREPRUNE(self, num):
+        u"""配列の手前をnumの値分だけ削る操作
+        to_circular()で用いる"""
+        first_frag = self.fragments[0]
+        if first_frag.is_reverse:
+            first_frag.start -= num
+        else:
+            first_frag.start += num
+        self.fragments[0] = first_frag
+
     def ADD_FRAGMENT(self, fragment):
+        print fragment.contig.name, fragment.start, fragment.end
         self.fragments.append(fragment)
 
-    def add_blast(self, blast, linktype, query_list, subject_list):
+    def add_blast(self, blast, linktype, query_list, subject_list, first_key = QUERY):
         u"""BLASTをもとに配列を伸長する関数。
-        linktypeにはBLASTをどの型として扱うかを入力する"""
-        query = search_object(query, query_list)
-        subject = search_object(subject, subject_list)
+        linktypeにはBLASTをどの型として扱うかを入力する
+        fragmentオブジェクトが入っていない状態のとき、first_keyに1(QUERY)または2(SUBJECT)を入力すると
+        最初に入れるfragmentをどちらか決めることができる(デフォルトはQUERY)"""
+        query = search_object(blast.qname, query_list)
+        subject = search_object(blast.sname, subject_list)
+        if self.fragments == []:
+            if linktype == CONTAIN:
+                self.ADD_FRAGMENT(Fragment(subject, 0, blast.slen-1))
+                return 0
+            elif linktype == CONTAINED:
+                self.ADD_FRAGMENT(Fragment(query, 0, blast.qlen-1))
+                return 0
+
+            if first_key == QUERY:
+                if linktype == START_LINK:
+                    self.ADD_FRAGMENT(Fragment(query, blast.qlen-1, 0))
+                else:
+                    self.ADD_FRAGMENT(Fragment(query, 0, blast.qlen-1))
+            elif first_key == SUBJECT:
+                if linktype == START_LINK:
+                    if blast.is_reverse:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.slen-1, 0))
+                    else:
+                        self.ADD_FRAGMENT(Fragment(subject, 0, blast.slen-1))
+                else:
+                    if blast.is_reverse:
+                        self.ADD_FRAGMENT(Fragment(subject, 0, blast.slen-1))
+                    else:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.slen-1, 0))
+        
+        print blast.qname, blast.sname
+        print self.fragments[-1].contig.name
+        print linktype, blast.is_reverse
+
         if self.fragments[-1].contig.name == blast.qname:
             if linktype == START_LINK:
                 self.PLUNE(blast.qend + 1)
@@ -360,9 +423,9 @@ class Sequence():
             else:
                 self.PLUNE(blast.qlen - blast.qstart)
                 if blast.is_reverse:
-                    self.ADD_FRAGMENT(Fragment(subject, blast.sstart, blast.slen-1))
-                else:
                     self.ADD_FRAGMENT(Fragment(subject, blast.sstart, 0))
+                else:
+                    self.ADD_FRAGMENT(Fragment(subject, blast.sstart, blast.slen-1))
         elif self.fragments[-1].contig.name == blast.sname:
             if linktype == START_LINK:
                 if blast.is_reverse:
@@ -372,9 +435,28 @@ class Sequence():
                 self.ADD_FRAGMENT(Fragment(query, blast.qend+1, blast.qlen-1))
             else:
                 if blast.is_reverse:
-                    self.PLUNE(blast.sstart)
-                else:
                     self.PLUNE(blast.slen - blast.sstart - 1)
+                else:
+                    self.PLUNE(blast.sstart)
                 self.ADD_FRAGMENT(Fragment(query, blast.qstart, 0))
         else:
+            print "not connecting"
             return 0
+
+    def to_circular(self, blast, linktype):
+        u"""頭とおしりのFragmentに関するblast結果を用いて環状化する。
+        具体的には必要の無い部分を削る作業となる"""
+
+        if self.fragments[-1].contig.name == blast.qname:
+            if linktype == START_LINK:
+                self.PLUNE(blast.qend + 1)
+                if blast.is_reverse:
+                    self.PREPRUNE(blast.send)
+                else:
+                    self.PREPRUNE(blast.slen - blast.send - 1)
+            else:
+                self.PLUNE(blast.qlen - blast.qstart)
+                if blast.is_reverse:
+                    self.PREPRUNE(blast.slen - blast.sstart - 1)
+                else:
+                    self.PREPRUNE(blast.sstart)

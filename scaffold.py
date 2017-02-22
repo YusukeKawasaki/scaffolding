@@ -221,5 +221,5 @@ for contig in query_list:
 #print "replace done"
 
 #fastaファイルとして出力
-complete_data = [sqs_chain.make_fasta_data(query_list, subject_list, log_text) for sqs_chain in shiritori.sqs_chains]
+complete_data = [sqs_chain.make_sequence_data(query_list, subject_list, log_text) for sqs_chain in shiritori.sqs_chains]
 SeqIO.write(complete_data, OUTPUT_FASTA_NAME, "fasta")

@@ -59,7 +59,9 @@ class Sqs:
         elif blast_type == CONTAIN: #始点型、または終点型が無かった場合に用いる
             able_subject_list = self.query.contain_list[:]
             another_subject_list = self.query.contain_list[:]
-
+        
+        if len(self.query.contain_list) > 4:
+            return None
         if len(able_subject_list) >= 1: #候補が１つ以上あるものは最も長いものを採用
             return max(able_subject_list, key = lambda x:x.slen)
         else:#候補がないときは
@@ -218,19 +220,42 @@ class Sqs_chain:
                         fragment_list.append(Fragment(query, obj.q_pointas[END],obj.q_pointas[START]))
                     if self.type == "line":
                         fragment_list.append(Fragment(subject, now_s_pointa, next_end_point))
-        full_seq = fragment_list[0].seq
+        full_seq = fragment_list[0].seq()
         if log_text is not None:
             log_text.write(">>seq:%s\n\n"%(self.name))
         for fragment in fragment_list:
             fragment.check(log_text)
             if fragment != fragment_list[0]:
-                full_seq += fragment.seq
+                full_seq += fragment.seq()
         full_seq = SeqRecord(full_seq)
         full_seq.name = str(self.name)
         full_seq.id = str(self.name)
         full_seq.description = ''
         return full_seq
 
+    def make_sequence_data(self, query_list, subject_list, log_text):
+        u"""fastaを返す
+        sequenceクラスはfragmentの列で、add_blastを用いてblast結果を元に配列を伸長することができる"""
+        sequence = Sequence(self.name)
+        for obj in self.seq:
+            if isinstance(obj, Blast):
+                sequence.add_blast(obj, obj.type, query_list, subject_list, first_key = QUERY)
+            elif isinstance(obj, Sqs):
+                if self.type == "circle" and obj == self.seq[-1]:
+                    if obj.chain_direction == PLUS:
+                        sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.to_circular(obj.blasts[1], END_LINK)
+                    else:
+                        sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.to_circular(obj.blasts[0], START_LINK)
+                else:
+                    if obj.chain_direction == PLUS:
+                        sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list)
+                    else:
+                        sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list)
+        return sequence.output_seqrecord(log_text)
 
 class Sqs_chains:
     u""" SQSリストからstrings(文字列),sqs_chains(sqs_chainの集まり)を生成するためのクラス
