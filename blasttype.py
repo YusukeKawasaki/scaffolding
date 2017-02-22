@@ -55,7 +55,7 @@ class Blast:
         self.query_subject_displacement = self.qstart - self.sstart #蛇足　クエリとサブジェクトのずれ
         #以下4つは一致部分から端までの距離。条件5,6で用いる値
         self.qstart_to_edge_length = self.qstart
-        self.qend_to_edge_length = self.qlen - self.qend + 1
+        self.qend_to_edge_length = self.qlen - self.qend - 1
         self.sstart_to_edge_length = self.SSTART_TO_EDGE_LENGTH() #PacBioは向きによって処理が異なるので関数に回す
         self.send_to_edge_length = self.SEND_TO_EDGE_LENGTH() #同様
 
@@ -145,7 +145,7 @@ class Blast:
     def SSTART_TO_EDGE_LENGTH(self):
         u"""条件5用の値"""
         if self.is_reverse:
-            return self.slen - self.sstart + 1
+            return self.slen - self.sstart - 1
         else:
             return self.sstart
 
@@ -154,7 +154,7 @@ class Blast:
         if self.is_reverse:
             return self.send
         else:
-            return self.slen - self.send + 1
+            return self.slen - self.send - 1
 
     def WHICH_TYPE(self):
         """blastを4つの型に分類し、型に対応した1～4の整数を返す

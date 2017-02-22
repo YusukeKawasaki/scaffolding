@@ -341,3 +341,40 @@ class Sequence():
                 self.fragments.remove(last_frag)
                 num -= last_frag.length
                 last_frag = self.fragments[-1]
+
+    def ADD_FRAGMENT(self, fragment):
+        self.fragments.append(fragment)
+
+    def add_blast(self, blast, linktype, query_list, subject_list):
+        u"""BLASTをもとに配列を伸長する関数。
+        linktypeにはBLASTをどの型として扱うかを入力する"""
+        query = search_object(query, query_list)
+        subject = search_object(subject, subject_list)
+        if self.fragments[-1].contig.name == blast.qname:
+            if linktype == START_LINK:
+                self.PLUNE(blast.qend + 1)
+                if blast.is_reverse:
+                    self.ADD_FRAGMENT(Fragment(subject, blast.send, blast.slen-1))
+                else:
+                    self.ADD_FRAGMENT(Fragment(subject, blast.send, 0))
+            else:
+                self.PLUNE(blast.qlen - blast.qstart)
+                if blast.is_reverse:
+                    self.ADD_FRAGMENT(Fragment(subject, blast.sstart, blast.slen-1))
+                else:
+                    self.ADD_FRAGMENT(Fragment(subject, blast.sstart, 0))
+        elif self.fragments[-1].contig.name == blast.sname:
+            if linktype == START_LINK:
+                if blast.is_reverse:
+                    self.PLUNE(blast.send)
+                else:
+                    self.PLUNE(blast.slen - blast.send - 1)
+                self.ADD_FRAGMENT(Fragment(query, blast.qend+1, blast.qlen-1))
+            else:
+                if blast.is_reverse:
+                    self.PLUNE(blast.sstart)
+                else:
+                    self.PLUNE(blast.slen - blast.sstart - 1)
+                self.ADD_FRAGMENT(Fragment(query, blast.qstart, 0))
+        else:
+            return 0
