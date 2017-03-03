@@ -193,30 +193,21 @@ class contig:
             q_start = replacing_posi[0]
             q_end = replacing_posi[1]
 
-            if s_start < s_end:
-                if q_start < q_end:
-                    cut_seq = replacing_seq[q_start: q_end + 1]
-                    seq1 = replaced_seq[:s_start]
-                    seq2 = replaced_seq[s_end + 1:]
-                else:
-                    cut_seq = replacing_seq[q_end: q_start + 1]
-                    seq1 = replaced_seq[:s_start]
-                    seq2 = replaced_seq[s_end + 1:]
-                    cut_seq = cut_seq.reverse_complement()
-                full_seq = seq1 + cut_seq + seq2
-
-            else:
-                if q_start < q_end:
-                    cut_seq = replacing_seq[q_start: q_end + 1]
-                    seq1 = replaced_seq[:s_end]
-                    seq2 = replaced_seq[s_start + 1:]
-                else:
-                    cut_seq = replacing_seq[q_end: q_start + 1]
-                    seq1 = replaced_seq[:s_end]
-                    seq2 = replaced_seq[s_start + 1:]
-                    cut_seq = cut_seq.reverse_complement()
-                full_seq = seq1 + cut_seq + seq2
-                full_seq = full_seq.reverse_complement()
+            if not blast.is_reverse:
+                cut_seq = replacing_seq[q_start: q_end + 1]
+                seq1 = replaced_seq[:s_start]
+                seq2 = replaced_seq[s_end + 1:]
+            elif isinstance(self, Query):
+                cut_seq = replacing_seq[q_end: q_start + 1] #B
+                seq1 = replaced_seq[:s_start]
+                seq2 = replaced_seq[s_end + 1:]
+                cut_seq = cut_seq.reverse_complement()
+            elif isinstance(self, Subject):
+                cut_seq = replacing_seq[q_start: q_end + 1] #A
+                seq1 = replaced_seq[:s_end]
+                seq2 = replaced_seq[s_start + 1:]
+                cut_seq = cut_seq.reverse_complement()
+            full_seq = seq1 + cut_seq + seq2
 
             self.fasta.seq = full_seq
             plus_val += len(self.fasta.seq) - len(replaced_seq)
@@ -377,11 +368,13 @@ class Sequence():
         print fragment.contig.name, fragment.start, fragment.end
         self.fragments.append(fragment)
 
-    def add_blast(self, blast, linktype, query_list, subject_list, first_key = QUERY):
+    def add_blast(self, blast, linktype, query_list, subject_list, first_key = QUERY, priority = QUERY):
         u"""BLASTをもとに配列を伸長する関数。
         linktypeにはBLASTをどの型として扱うかを入力する
         fragmentオブジェクトが入っていない状態のとき、first_keyに1(QUERY)または2(SUBJECT)を入力すると
-        最初に入れるfragmentをどちらか決めることができる(デフォルトはQUERY)"""
+        最初に入れるfragmentをどちらか決めることができる(デフォルトはQUERY)
+        when as single contain-type blast output, linktype = CONTAIN(=3)
+        when as sequence parts contain-type blast output, linktype = START_LINK(=1) or END_LINK(=2)"""
         query = search_object(blast.qname, query_list)
         subject = search_object(blast.sname, subject_list)
         if self.fragments == []:
@@ -413,32 +406,60 @@ class Sequence():
         print self.fragments[-1].contig.name
         print linktype, blast.is_reverse
 
-        if self.fragments[-1].contig.name == blast.qname:
-            if linktype == START_LINK:
-                self.PLUNE(blast.qend + 1)
-                if blast.is_reverse:
-                    self.ADD_FRAGMENT(Fragment(subject, blast.send, blast.slen-1))
+        if priority == SUBJECT:
+            if self.fragments[-1].contig.name == blast.qname:
+                if linktype == START_LINK:
+                    self.PLUNE(blast.qend + 1)
+                    if blast.is_reverse:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.send, blast.slen-1))
+                    else:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.send, 0))
                 else:
-                    self.ADD_FRAGMENT(Fragment(subject, blast.send, 0))
-            else:
-                self.PLUNE(blast.qlen - blast.qstart)
-                if blast.is_reverse:
-                    self.ADD_FRAGMENT(Fragment(subject, blast.sstart, 0))
+                    self.PLUNE(blast.qlen - blast.qstart)
+                    if blast.is_reverse:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.sstart, 0))
+                    else:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.sstart, blast.slen-1))
+            elif self.fragments[-1].contig.name == blast.sname:
+                if linktype == START_LINK:
+                    if blast.is_reverse:
+                        self.PLUNE(blast.send)
+                    else:
+                        self.PLUNE(blast.slen - blast.send - 1)
+                    self.ADD_FRAGMENT(Fragment(query, blast.qend+1, blast.qlen-1))
                 else:
-                    self.ADD_FRAGMENT(Fragment(subject, blast.sstart, blast.slen-1))
-        elif self.fragments[-1].contig.name == blast.sname:
-            if linktype == START_LINK:
-                if blast.is_reverse:
-                    self.PLUNE(blast.send)
+                    if blast.is_reverse:
+                        self.PLUNE(blast.slen - blast.sstart - 1)
+                    else:
+                        self.PLUNE(blast.sstart)
+                    self.ADD_FRAGMENT(Fragment(query, blast.qstart, 0))
+        elif priority == QUERY:
+            if self.fragments[-1].contig.name == blast.qname:
+                if linktype == START_LINK:
+                    self.PLUNE(blast.qstart)
+                    if blast.is_reverse:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.sstart-1, blast.slen-1))
+                    else:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.sstart-1, 0))
                 else:
-                    self.PLUNE(blast.slen - blast.send - 1)
-                self.ADD_FRAGMENT(Fragment(query, blast.qend+1, blast.qlen-1))
-            else:
-                if blast.is_reverse:
-                    self.PLUNE(blast.slen - blast.sstart - 1)
+                    self.PLUNE(blast.qlen - blast.qend-1)
+                    if blast.is_reverse:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.send-1, 0))
+                    else:
+                        self.ADD_FRAGMENT(Fragment(subject, blast.send+1, blast.slen-1))
+            elif self.fragments[-1].contig.name == blast.sname:
+                if linktype == START_LINK:
+                    if blast.is_reverse:
+                        self.PLUNE(blast.sstart + 1)
+                    else:
+                        self.PLUNE(blast.slen - blast.sstart)
+                    self.ADD_FRAGMENT(Fragment(query, blast.qstart, blast.qlen-1))
                 else:
-                    self.PLUNE(blast.sstart)
-                self.ADD_FRAGMENT(Fragment(query, blast.qstart, 0))
+                    if blast.is_reverse:
+                        self.PLUNE(blast.slen - blast.send)
+                    else:
+                        self.PLUNE(blast.send + 1)
+                    self.ADD_FRAGMENT(Fragment(query, blast.qend, 0))
         else:
             print "not connecting"
             return 0

@@ -233,27 +233,27 @@ class Sqs_chain:
         full_seq.description = ''
         return full_seq
 
-    def make_sequence_data(self, query_list, subject_list, log_text):
+    def make_sequence_data(self, query_list, subject_list, priority, log_text = None):
         u"""fastaを返す
         sequenceクラスはfragmentの列で、add_blastを用いてblast結果を元に配列を伸長することができる"""
         sequence = Sequence(self.name)
         for obj in self.seq:
             if isinstance(obj, Blast):
-                sequence.add_blast(obj, obj.type, query_list, subject_list, first_key = QUERY)
+                sequence.add_blast(obj, obj.type, query_list, subject_list, first_key = QUERY, priority = priority)
             elif isinstance(obj, Sqs):
                 if self.type == "circle" and obj == self.seq[-1]:
                     if obj.chain_direction == PLUS:
-                        sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list, first_key = SUBJECT, priority = priority)
                         sequence.to_circular(obj.blasts[1], END_LINK)
                     else:
-                        sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list, first_key = SUBJECT, priority = priority)
                         sequence.to_circular(obj.blasts[0], START_LINK)
                 else:
                     if obj.chain_direction == PLUS:
-                        sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list, first_key = SUBJECT, priority = priority)
                         sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list)
                     else:
-                        sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list, first_key = SUBJECT)
+                        sequence.add_blast(obj.blasts[1], END_LINK, query_list, subject_list, first_key = SUBJECT, priority = priority)
                         sequence.add_blast(obj.blasts[0], START_LINK, query_list, subject_list)
         return sequence.output_seqrecord(log_text)
 

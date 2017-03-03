@@ -20,12 +20,14 @@ def command(argv):
 
     global toLog
     global toRemoveN
+    global priority
     global SUBJECT_FASTA_NAME
     global QUERY_FASTA_NAME
     global OUTPUT_FASTA_NAME
 
     toLog = False
     toRemoveN = False
+    priority = QUERY
     OUTPUT_FASTA_NAME = datetime.now().strftime('%m%d%H%M.fasta')
     parser = argparse.ArgumentParser()
 
@@ -35,6 +37,7 @@ def command(argv):
 
     #not required arguments
     parser.add_argument("-o", help="Output file name(default = time.now)", required=False)
+    parser.add_argument("-r", help="override PacBio-contig(p) or MiSeq-contig(m) (default MiSeq)",choices=['m', 'p'], required=False)
 
     #Boolean arguments
     parser.add_argument("-n", help="Removes Miseq N-gap", action = "store_true", required=False)
@@ -48,6 +51,8 @@ def command(argv):
     QUERY_FASTA_NAME = args.m
     if args.o is not None:
         OUTPUT_FASTA_NAME = args.o
+    if args.r == "p":
+        priority = SUBJECT
 
 command(sys.argv[1:])
 
@@ -81,12 +86,16 @@ def make_blast_list(BLAST_NAME):
     BLAST_DATA = Blast_data(BLAST_NAME)
     rowMax = BLAST_DATA.nrows#最終行を整数値で取得
     BITSCORE_BASELINE = 0
+    QUERY_LENGTH_BASELINE = 10000
+    SUBJECT_LENGTH_BASELINE = 0
     well_blast_list=[]#入れ物
 
     #BITSCOREで選別
     for row in range(rowMax): #[0,1,2,....,rowMax -1]
         blast = Blast(BLAST_DATA, row)
-        if blast.bitscore > BITSCORE_BASELINE:
+        if blast.bitscore > BITSCORE_BASELINE\
+        and blast.qlen > QUERY_LENGTH_BASELINE\
+        and blast.slen > SUBJECT_LENGTH_BASELINE:
             well_blast_list.append(blast)
 
     print 'well_blast_list(bitscore) done'
@@ -211,8 +220,12 @@ for query in not_using_querys:
 print "sqs_chain(not using queries) done"
 
 #内包してるものの置き換え
-for contig in query_list:
-    contig.contain_replace(query_list = query_list, subject_list = subject_list, length = 5000) #5000塩基以上のもので置き換え
+if priority == QUERY:
+    for contig in subject_list:
+        contig.contain_replace(query_list = query_list, subject_list = subject_list)
+elif priority == SUBJECT:
+    for contig in query_list:
+        contig.contain_replace(query_list = query_list, subject_list = subject_list, length = 5000) #5000塩基以上のもので置き換え
 
 #置き換えているもののfasta化
 #s_seq_list = [x.fasta.make_seqrecord() for x in query_list]
@@ -221,5 +234,5 @@ for contig in query_list:
 #print "replace done"
 
 #fastaファイルとして出力
-complete_data = [sqs_chain.make_sequence_data(query_list, subject_list, log_text) for sqs_chain in shiritori.sqs_chains]
+complete_data = [sqs_chain.make_sequence_data(query_list, subject_list, priority = priority, log_text = log_text) for sqs_chain in shiritori.sqs_chains]
 SeqIO.write(complete_data, OUTPUT_FASTA_NAME, "fasta")
