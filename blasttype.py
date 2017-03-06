@@ -205,6 +205,19 @@ class Blast:
         
         return (start_edge, end_edge)
 
+    def Is_same(self, blast):
+        if self.row != blast.row and self.qname == blast.sname and self.sname == blast.qname \
+        and self.match_num == blast.match_num and self.bitscore == blast.bitscore:
+            return True
+        else:
+            return False
+
+    def is_equal(self):
+        if self.qname == self.sname and self.qstart == self.sstart and self.qend == self.send:
+            return True
+        else:
+            return False
+
     
 
 class Multi_blast(Blast):
