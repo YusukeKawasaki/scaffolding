@@ -44,6 +44,7 @@ class Simple_fasta:
         self.seq = fasta_data.seq
         self.id = fasta_data.id
         self.description = fasta_data.description
+        self.replace_dev = 0
 
     def make_seqrecord(self):
         u"""Simple_fastaが自身をseqrecordに変換する
