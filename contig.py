@@ -127,11 +127,15 @@ class contig:
         plus_val = 0
         for n_posi in self.n_position: #n_posi = (N_start, N_end)
             frag = False
+            if self.name == "contig_9":
+                print n_posi
+                print self.multi_null_positions
             for null_posi_set in self.multi_null_positions: #null_posi_set = (null_posi_q, null_posi_s)
                 null_posi_q = null_posi_set[0] #null_posi_q = (qname, start, end) マルチ型においてqueryの空白部分
                 null_posi_s = null_posi_set[1] #null_posi_s = (sname, start, end) マルチ型においてsubjectの空白部分
                 if n_posi[0] - dev < null_posi_q[1] < n_posi[0] + dev and\
                 n_posi[1] - dev < null_posi_q[2] < n_posi[1] + dev: # n_posiとnull_posi_qが近い値を示すとき
+                    print self.name
                     dev0 = n_posi[0] - null_posi_q[1] #差を保存して
                     dev1 = n_posi[1] - null_posi_q[2] #差を保存して
                     qname = null_posi_q[0]

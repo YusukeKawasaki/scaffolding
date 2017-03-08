@@ -14,7 +14,7 @@ from simple_fasta import *
 from contig import *
 from sqs import *
 
-QUERY_FASTA_NAME = "ans298_170124_0.fasta"
+QUERY_FASTA_NAME = "03071002.fasta"
 SUBJECT_FASTA_NAME = QUERY_FASTA_NAME
 BLAST_NAME = "blast_%s_%s"%(QUERY_FASTA_NAME, SUBJECT_FASTA_NAME)
 OUTPUT_FASTA_NAME = "new" + QUERY_FASTA_NAME
