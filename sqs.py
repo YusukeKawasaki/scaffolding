@@ -40,6 +40,9 @@ class Sqs:
         self.snames = map(lambda x:x and x.sname or x, self.blasts)
         self.directions = map(lambda x:x and int(x.is_reverse + 1) or x,self.blasts) #MiSeqに対してBLASTが正向きなら1、逆向きなら2
         self.type = bool(self.blasts[START] and self.blasts[END]) #始点側、終点側に共にBLASTが存在すればTrue,そうでなければFalseを返します
+        if self.snames[0] == self.snames[1]:
+            self.type = False
+            print query.name
         if self.type == True:
             for blast in blast_list:
                 for a_blast in self.blasts:
@@ -279,8 +282,8 @@ class Sqs_chains:
                 sqs.chain_direction = 3 - sqs.chain_direction
             sqs_chain.reverse()
             return sqs_chain
-
-        sqs_list = copy.deepcopy(sqs_list)
+        
+        sqs_list = sqs_list[:]
         shiritori_list = [] #contig名と向きが入った文字列リストをここに
         sqs_chains = [] #sqs_chain = sqsを並べたリストをここに
         while sqs_list:
